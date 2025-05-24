@@ -6,50 +6,89 @@ A FastAPI-based automation service for AIP print operations.
 
 - Automated AIP print operations with configurable workplace positions (1-4)
 - Real-time status window for operation feedback
-- Comprehensive logging
+- Error logging
 - Hot-reload enabled development server
+- Windows service for automatic startup
 
 ## Prerequisites
 
 - Python 3.7+
 - Windows OS (required for pywinauto functionality)
 - AIP application installed and configured
+- Git installed on development machine
+- Administrator privileges on Hydra Shuttle for service installation
 
-## Installation
+## Deployment Workflow
+
+### 1. Development Machine Setup
 
 1. Clone the repository:
 
-```bash
-git clone <your-repository-url>
+```batch
+git clone https://github.com/your-org/hydra-print-automation.git
 cd hydra-print-automation
 ```
 
-2. Create and activate a virtual environment:
+2. Prepare dependencies for offline installation:
 
-```bash
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+```batch
+python download_packages.py
 ```
 
-3. Install dependencies:
+This will create a `deps` directory with all required packages.
 
-```bash
-pip install -r requirements.txt
+### 2. Deployment to Hydra Shuttle
+
+1. Copy the entire project directory to Hydra Shuttle:
+
+   - Copy the following files and directories:
+     - `main.py`
+     - `requirements.txt`
+     - `deps/` directory
+     - `install.bat`
+     - `service_install.bat`
+
+2. On Hydra Shuttle, run the installation script:
+
+```batch
+install.bat
 ```
 
-## Usage
+### 3. Windows Service Setup
+
+1. Install as Windows Service (requires Administrator privileges):
+
+```batch
+service_install.bat
+```
+
+The service will be installed with the following properties:
+
+- Service Name: `HydraPrintAutomation`
+- Display Name: `Hydra Print Automation Service`
+- Startup Type: Automatic
+- Description: "Automates AIP print operations for Hydra system"
+
+2. Service Management:
+   - Start service: `net start HydraPrintAutomation`
+   - Stop service: `net stop HydraPrintAutomation`
+   - Check status: `sc query HydraPrintAutomation`
+
+## Manual Operation (Alternative to Service)
+
+If you prefer to run the application manually:
 
 1. Start the server:
 
-```bash
+```batch
 python main.py
 ```
 
-2. The server will be available at `http://localhost:1995`
+2. The server will be available at `http://localhost:5000`
 
-### API Endpoints
+## API Endpoints
 
-#### Run AIP Print Automation
+### Run AIP Print Automation
 
 ```bash
 POST /run-aip-print-automation
@@ -69,26 +108,14 @@ Response:
 }
 ```
 
-## API Documentation
-
-Once the server is running, you can access the interactive API documentation at:
-
-- Swagger UI: `http://localhost:1995/docs`
-- ReDoc: `http://localhost:1995/redoc`
-
 ## Logging
 
-Logs are written to `app.log` and also displayed in the console. The log file includes:
+Logs are written to `app.log` and also displayed in the console. The log file includes only error messages:
 
-- API requests and responses
-- Automation operations
-- Error messages
-- Window management events
+- Automation errors
+- Window management errors
+- Service errors
 
 ## Development
 
 The server runs with hot-reload enabled, so changes to the code will automatically restart the server.
-
-## License
-
-[Your License Here]

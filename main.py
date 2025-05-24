@@ -12,7 +12,7 @@ import logging
 
 # Configure logging to both file and console
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.ERROR,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('app.log'),
@@ -41,7 +41,6 @@ def remember_active_window_title():
         for w in windows:
             if "Chrome" in w.window_text():
                 focused_chrome_window["title"] = w.window_text()
-                logger.info(f"Remembered Chrome window: {w.window_text()}")
                 return
     except Exception as e:
         logger.error(f"Error remembering Chrome window: {e}")
@@ -56,7 +55,6 @@ def restore_chrome():
             if win.is_minimized():
                 win.restore()
             win.set_focus()
-            logger.info(f"Restored Chrome window: {focused_chrome_window['title']}")
     except Exception as e:
         logger.error(f"Error restoring Chrome window: {e}")
 
@@ -78,7 +76,6 @@ def status_window_fn():
         font=("Segoe UI", 18, "bold")
     )
     label.pack(expand=True)
-    logger.info("Status window displayed")
     win.mainloop()
 
 def show_status_window():
@@ -86,7 +83,6 @@ def show_status_window():
     global status_process
     status_process = Process(target=status_window_fn)
     status_process.start()
-    logger.info("Status window process started")
 
 def close_status_window():
     """Terminate the status window process"""
@@ -95,7 +91,6 @@ def close_status_window():
         status_process.terminate()
         status_process.join()
         status_process = None
-        logger.info("Status window closed")
 
 def automation_task(identifier: str, workplace_position: int = 1):
     """
@@ -105,13 +100,11 @@ def automation_task(identifier: str, workplace_position: int = 1):
         identifier: The identifier to be entered in the system
         workplace_position: Position number (1-4) for workplace selection
     """
-    logger.info(f"Starting automation task for identifier: {identifier}, workplace: {workplace_position}")
     show_status_window()
-    
     remember_active_window_title()
 
     try:
-        # Find and focus the AIP window
+        # Find and focus the window
         matches = Desktop(backend="win32").windows(title_re=".*AIP.*")
         if not matches:
             logger.error("No AIP window found")
@@ -130,7 +123,6 @@ def automation_task(identifier: str, workplace_position: int = 1):
         # Select workplace position with vertical offset
         workplace_y = 76 + (workplace_position - 1) * 73
         pyautogui.click(x=85, y=workplace_y)
-        logger.info(f"Selected workplace position {workplace_position}")
         time.sleep(1)
 
         # Navigate to identifier input field
@@ -141,7 +133,6 @@ def automation_task(identifier: str, workplace_position: int = 1):
         pyautogui.click(x=286, y=636)
         time.sleep(0.5)
         pyautogui.write(identifier)
-        logger.info(f"Entered identifier: {identifier}")
         time.sleep(0.5)
 
         # Submit the form
@@ -157,7 +148,6 @@ def automation_task(identifier: str, workplace_position: int = 1):
     restore_chrome()
     time.sleep(0.5)
     close_status_window()
-    logger.info("Automation task completed successfully")
 
 @app.post("/run-aip-print-automation")
 async def run_automation(request: Request, body: AutomationRequest):
@@ -171,11 +161,9 @@ async def run_automation(request: Request, body: AutomationRequest):
     Returns:
         dict: Status of the automation request
     """
-    logger.info(f"Starting automation request: {body.dict()}")
     thread = Thread(target=automation_task, args=(body.identifier, body.workplace_position))
     thread.start()
     return {"status": "started"}
 
 if __name__ == "__main__":
-    logger.info("Starting Hydra Print Automation server")
-    uvicorn.run("main:app", host="0.0.0.0", port=1995)
+    uvicorn.run("main:app", host="0.0.0.0", port=5000)

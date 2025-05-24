@@ -5,15 +5,20 @@ REM Create and activate virtual environment
 python -m venv venv
 call venv\Scripts\activate.bat
 
-REM Install dependencies from local folder
+REM Install dependencies from local deps folder
 echo Installing dependencies...
-pip install --no-index --find-links=./packages -r requirements.txt
+pip install --no-index --find-links=./deps -r requirements.txt
 
-REM Set up environment variables
-set API_TOKEN=your_token_here
+REM Create necessary directories
+if not exist logs mkdir logs
 
-REM Start the application
-echo Starting the application...
-python main.py
-
+echo Installation completed successfully.
+echo.
+echo To run the application manually:
+echo 1. Activate the virtual environment: venv\Scripts\activate.bat
+echo 2. Run the application: python main.py
+echo.
+echo To install as a Windows service (requires administrator privileges):
+echo 1. Run service_install.bat as administrator
+echo.
 pause 
