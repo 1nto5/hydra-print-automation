@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pyautogui
+pywinauto
+psutil
+keyboard
+setuptools>=40.8.0
+wheel
