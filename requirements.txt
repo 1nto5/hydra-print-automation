@@ -6,3 +6,4 @@ psutil
 keyboard
 setuptools>=40.8.0
 wheel
+python-dotenv

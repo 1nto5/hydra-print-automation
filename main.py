@@ -1,3 +1,4 @@
+# FastAPI server for automating print operations in HYDRA system
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException
 from pydantic import BaseModel, Field
@@ -7,45 +8,46 @@ import time
 import tkinter as tk
 from pywinauto import Application, Desktop
 import pyautogui
-import subprocess
-import os
-from typing import Dict
+import logging
 
+# Configure logging to both file and console
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('app.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# Initialize FastAPI application
 app = FastAPI()
 
-# Get API token from environment variable
-API_TOKEN = os.getenv("API_TOKEN")
-if not API_TOKEN:
-    raise ValueError(
-        "API_TOKEN environment variable is not set. "
-        "Please set it using: export API_TOKEN=your_token_here"
-    )
-
+# Global variables for window management
 focused_chrome_window = {"title": None}
 status_process = None
 
+# Request model for automation endpoint
 class AutomationRequest(BaseModel):
     identifier: str
-    variant_position: int = Field(default=1, ge=1, le=4, description="Variant position (1-4)")
-    machine_position: int = Field(default=1, ge=1, le=4, description="Machine position (1-4)")
-
-class UpdateResponse(BaseModel):
-    status: str
-    message: str
-    details: Dict = {}
+    workplace_position: int = Field(default=1, ge=1, le=4, description="Workplace position (1-4)")
 
 def remember_active_window_title():
+    """Store the title of the currently active Chrome window for later restoration"""
     global focused_chrome_window
     try:
         windows = Desktop(backend="win32").windows()
         for w in windows:
             if "Chrome" in w.window_text():
                 focused_chrome_window["title"] = w.window_text()
+                logger.info(f"Remembered Chrome window: {w.window_text()}")
                 return
     except Exception as e:
-        print("Error remembering Chrome window:", e)
+        logger.error(f"Error remembering Chrome window: {e}")
 
 def restore_chrome():
+    """Restore the previously active Chrome window"""
     global focused_chrome_window
     try:
         if focused_chrome_window["title"]:
@@ -54,10 +56,12 @@ def restore_chrome():
             if win.is_minimized():
                 win.restore()
             win.set_focus()
+            logger.info(f"Restored Chrome window: {focused_chrome_window['title']}")
     except Exception as e:
-        print("Error restoring Chrome window:", e)
+        logger.error(f"Error restoring Chrome window: {e}")
 
 def status_window_fn():
+    """Create and display a status window showing automation progress"""
     win = tk.Tk()
     screen_width = win.winfo_screenwidth()
     win.geometry(f"{screen_width}x60+0+0")
@@ -74,28 +78,43 @@ def status_window_fn():
         font=("Segoe UI", 18, "bold")
     )
     label.pack(expand=True)
+    logger.info("Status window displayed")
     win.mainloop()
 
 def show_status_window():
+    """Start the status window in a separate process"""
     global status_process
     status_process = Process(target=status_window_fn)
     status_process.start()
+    logger.info("Status window process started")
 
 def close_status_window():
+    """Terminate the status window process"""
     global status_process
     if status_process is not None:
         status_process.terminate()
         status_process.join()
         status_process = None
+        logger.info("Status window closed")
 
-def automation_task(identifier: str, variant_position: int = 1, machine_position: int = 1):
+def automation_task(identifier: str, workplace_position: int = 1):
+    """
+    Main automation sequence for print operations
+    
+    Args:
+        identifier: The identifier to be entered in the system
+        workplace_position: Position number (1-4) for workplace selection
+    """
+    logger.info(f"Starting automation task for identifier: {identifier}, workplace: {workplace_position}")
     show_status_window()
     
     remember_active_window_title()
 
     try:
+        # Find and focus the AIP window
         matches = Desktop(backend="win32").windows(title_re=".*AIP.*")
         if not matches:
+            logger.error("No AIP window found")
             return
 
         win = matches[0]
@@ -104,103 +123,59 @@ def automation_task(identifier: str, variant_position: int = 1, machine_position
         win.set_focus()
         time.sleep(0.5)
 
-        # Predefined Y coordinates for variant selection
-        variant_positions = {
-            1: 639,  # First variant
-            2: 669,  # Second variant
-            3: 699,  # Third variant
-            4: 729   # Fourth variant
-        }
-        variant_y = variant_positions.get(variant_position, 639)
-        pyautogui.click(x=1266, y=variant_y)
+        # Initial click to ensure window focus
+        pyautogui.click(x=1266, y=639)
         time.sleep(1)
 
-        # Machine selection with 30px vertical offset between positions
-        machine_y = 419 + (machine_position - 1) * 30
-        pyautogui.click(x=469, y=machine_y)
+        # Select workplace position with vertical offset
+        workplace_y = 76 + (workplace_position - 1) * 73
+        pyautogui.click(x=85, y=workplace_y)
+        logger.info(f"Selected workplace position {workplace_position}")
         time.sleep(1)
 
-        # Navigation and identifier input sequence
+        # Navigate to identifier input field
         pyautogui.click(x=114, y=654)
         time.sleep(1)
 
+        # Enter identifier
         pyautogui.click(x=286, y=636)
         time.sleep(0.5)
         pyautogui.write(identifier)
+        logger.info(f"Entered identifier: {identifier}")
         time.sleep(0.5)
 
+        # Submit the form
         pyautogui.click(x=1226, y=708)
         time.sleep(1)
 
     except Exception as e:
-        print("Automation error:", e)
+        logger.error(f"Automation error: {e}")
+        raise
 
+    # Restore previous window state
     time.sleep(0.5)
     restore_chrome()
     time.sleep(0.5)
     close_status_window()
+    logger.info("Automation task completed successfully")
 
-@app.post("/run-automation")
+@app.post("/run-aip-print-automation")
 async def run_automation(request: Request, body: AutomationRequest):
-    auth = request.headers.get("Authorization")
-    if auth != f"Bearer {API_TOKEN}":
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
-    thread = Thread(target=automation_task, args=(body.identifier, body.variant_position, body.machine_position))
+    """
+    API endpoint to trigger the automation sequence
+    
+    Args:
+        request: FastAPI request object
+        body: AutomationRequest containing identifier and optional workplace position
+    
+    Returns:
+        dict: Status of the automation request
+    """
+    logger.info(f"Starting automation request: {body.dict()}")
+    thread = Thread(target=automation_task, args=(body.identifier, body.workplace_position))
     thread.start()
     return {"status": "started"}
 
-@app.post("/update")
-async def update_from_github(request: Request):
-    auth = request.headers.get("Authorization")
-    if auth != f"Bearer {API_TOKEN}":
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    
-    try:
-        # Fetch latest changes
-        subprocess.run(["git", "fetch", "origin"], check=True)
-        
-        # Get current branch
-        current_branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode().strip()
-        
-        # Get local and remote commit hashes
-        local_commit = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()
-        remote_commit = subprocess.check_output(["git", "rev-parse", f"origin/{current_branch}"]).decode().strip()
-        
-        if local_commit == remote_commit:
-            return UpdateResponse(
-                status="success",
-                message="Already up to date",
-                details={"local_commit": local_commit}
-            )
-        
-        # Pull latest changes
-        subprocess.run(["git", "pull", "origin", current_branch], check=True)
-        
-        # Install/update dependencies if requirements.txt changed
-        if subprocess.run(["git", "diff", "--name-only", local_commit, "HEAD"], 
-                        capture_output=True, text=True).stdout.strip().split("\n"):
-            subprocess.run(["pip", "install", "-r", "requirements.txt"], check=True)
-        
-        return UpdateResponse(
-            status="success",
-            message="Update completed successfully",
-            details={
-                "previous_commit": local_commit,
-                "new_commit": remote_commit
-            }
-        )
-        
-    except subprocess.CalledProcessError as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Update failed: {str(e)}"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Unexpected error during update: {str(e)}"
-        )
-
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=5000)
+    logger.info("Starting Hydra Print Automation server")
+    uvicorn.run("main:app", host="0.0.0.0", port=1995)
