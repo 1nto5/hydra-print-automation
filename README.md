@@ -18,6 +18,30 @@ A FastAPI-based automation service for AIP print operations.
 - Git installed on development machine
 - Administrator privileges on Hydra Shuttle for service installation
 
+## Installation from Release
+
+### Option 1: Download Latest Release
+
+1. Go to the [Releases page](https://github.com/1nto5/hydra-print-automation/releases)
+2. Download the latest release ZIP file (e.g., `hydra-print-automation-v0.1.zip`)
+3. Extract the ZIP file to your desired location
+4. Follow the deployment steps below
+
+### Option 2: Using Git Clone
+
+1. Clone the repository:
+
+```batch
+git clone https://github.com/1nto5/hydra-print-automation.git
+cd hydra-print-automation
+```
+
+2. Checkout the desired release:
+
+```batch
+git checkout v0.1
+```
+
 ## Deployment Workflow
 
 ### 1. Development Machine Setup
