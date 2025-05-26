@@ -118,33 +118,37 @@ def automation_task(identifier: str, quantity: str, workplace_position: int = 1)
         win.set_focus()
         time.sleep(0.5)
 
-        # Initial click to ensure window focus
-        pyautogui.click(x=1266, y=639)
+        # Initial click to ensure operation window focus
+        pyautogui.click(x=1254, y=623) 
         time.sleep(1)
 
         # Select workplace position with vertical offset
-        workplace_y = 76 + (workplace_position - 1) * 73
-        pyautogui.click(x=85, y=workplace_y)
+        workplace_y = 77 + (workplace_position - 1) * 73
+        pyautogui.click(x=150, y=workplace_y) 
         time.sleep(1)
 
-        # Navigate to identifier input field
-        pyautogui.click(x=114, y=654)
+        # Click operation
+        pyautogui.click(x=466, y=407) 
         time.sleep(1)
 
-        # Enter quantity
-        pyautogui.click(x=823, y=247)
+        # Click output batch
+        pyautogui.click(x=129, y=652) 
+        time.sleep(1)
+
+        # Focus and enter quantity
+        pyautogui.click(x=813, y=248) 
         time.sleep(0.5)
         pyautogui.write(quantity)
         time.sleep(0.5)
         
-        # Enter identifier
-        pyautogui.click(x=286, y=636)
+        # Focus and enter identifier
+        pyautogui.click(x=293, y=632) 
         time.sleep(0.5)
         pyautogui.write(identifier)
         time.sleep(0.5)
 
-        # Submit the form
-        pyautogui.click(x=1226, y=708)
+        # Click print button
+        pyautogui.click(x=1191, y=711) 
         time.sleep(1)
 
     except Exception as e:
@@ -152,7 +156,7 @@ def automation_task(identifier: str, quantity: str, workplace_position: int = 1)
         raise
 
     # Restore previous window state
-    time.sleep(0.5)
+    time.sleep(2.5)
     restore_chrome()
     time.sleep(0.5)
     close_status_window()
