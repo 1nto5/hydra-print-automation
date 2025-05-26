@@ -31,6 +31,7 @@ status_process = None
 # Request model for automation endpoint
 class AutomationRequest(BaseModel):
     identifier: str
+    quantity: str
     workplace_position: int = Field(default=1, ge=1, le=4, description="Workplace position (1-4)")
 
 def remember_active_window_title():
@@ -92,12 +93,13 @@ def close_status_window():
         status_process.join()
         status_process = None
 
-def automation_task(identifier: str, workplace_position: int = 1):
+def automation_task(identifier: str, quantity: str, workplace_position: int = 1):
     """
     Main automation sequence for print operations
     
     Args:
         identifier: The identifier to be entered in the system
+        quantity: The quantity to be entered in the system
         workplace_position: Position number (1-4) for workplace selection
     """
     show_status_window()
@@ -129,6 +131,12 @@ def automation_task(identifier: str, workplace_position: int = 1):
         pyautogui.click(x=114, y=654)
         time.sleep(1)
 
+        # Enter quantity
+        pyautogui.click(x=823, y=247)
+        time.sleep(0.5)
+        pyautogui.write(quantity)
+        time.sleep(0.5)
+        
         # Enter identifier
         pyautogui.click(x=286, y=636)
         time.sleep(0.5)
@@ -161,7 +169,7 @@ async def run_automation(request: Request, body: AutomationRequest):
     Returns:
         dict: Status of the automation request
     """
-    thread = Thread(target=automation_task, args=(body.identifier, body.workplace_position))
+    thread = Thread(target=automation_task, args=(body.identifier, body.quantity, body.workplace_position))
     thread.start()
     return {"status": "started"}
 
