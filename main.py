@@ -1,5 +1,12 @@
-# FastAPI server for automating print operations in HYDRA system
+"""
+Hydra Print Automation Service
+Version: 0.1.1
+
+A FastAPI-based service for automating print operations in HYDRA system.
+"""
+
 import uvicorn
+from version import __version__
 from fastapi import FastAPI, Request, HTTPException
 from pydantic import BaseModel, Field
 from threading import Thread
@@ -22,7 +29,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Initialize FastAPI application
-app = FastAPI()
+app = FastAPI(
+    title="Hydra Print Automation",
+    description="Automation service for HYDRA print operations",
+    version=__version__
+)
+
+@app.get("/version")
+async def get_version():
+    """Return the current version of the service"""
+    return {"version": __version__}
 
 # Global variables for window management
 focused_chrome_window = {"title": None}
@@ -118,6 +134,8 @@ def automation_task(identifier: str, quantity: str, workplace_position: int = 1)
         win.set_focus()
         time.sleep(0.5)
 
+        # TODO: Add a click on the end button, then again a little higher to ensure the right window from the defects window or workplace window vertically
+
         # Initial click to ensure operation window focus
         pyautogui.click(x=1254, y=623) 
         time.sleep(1)
@@ -154,7 +172,7 @@ def automation_task(identifier: str, quantity: str, workplace_position: int = 1)
     except Exception as e:
         logger.error(f"Automation error: {e}")
         raise
-
+        
     # Restore previous window state
     time.sleep(2.5)
     restore_chrome()
