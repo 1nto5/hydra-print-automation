@@ -10,9 +10,16 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-REM Install dependencies
-echo Installing dependencies...
-pip install --no-cache-dir -r requirements.txt
+REM Install dependencies from local deps directory
+echo Installing dependencies from local packages...
+if not exist deps (
+    echo Error: Local packages directory 'deps' not found.
+    echo Please run 'python download_packages.py' first in environment with internet access to download the required packages.
+    pause
+    exit /b 1
+)
+
+pip install --no-index --find-links=file:./deps -r requirements.txt
 if %errorlevel% neq 0 (
     echo Failed to install dependencies.
     echo Please check your internet connection and try again.
@@ -28,7 +35,11 @@ echo.
 echo To run the application:
 echo   python main.py
 echo.
-echo To install as a Windows service (requires administrator privileges):
-echo 1. Run service_install.bat as administrator
+echo To configure automatic startup on login:
+echo 1. Run manage_startup.bat
+echo 2. Choose option 1 to add to Windows Startup
+echo.
+echo To run the application in the background (no console window):
+echo   start_app.bat
 echo.
 pause

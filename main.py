@@ -1,12 +1,11 @@
 """
 Hydra Print Automation Service
-Version: 0.1.1
+Version: 1.3.0
 
 A FastAPI-based service for automating print operations in HYDRA system.
 """
 
 import uvicorn
-from version import __version__
 from fastapi import FastAPI, Request, HTTPException
 from pydantic import BaseModel, Field
 from threading import Thread
@@ -28,17 +27,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Define the version directly
+VERSION = "1.3.0"
+
 # Initialize FastAPI application
 app = FastAPI(
     title="Hydra Print Automation",
     description="Automation service for HYDRA print operations",
-    version=__version__
+    version=VERSION
 )
-
-@app.get("/version")
-async def get_version():
-    """Return the current version of the service"""
-    return {"version": __version__}
 
 # Global variables for window management
 focused_chrome_window = {"title": None}
@@ -49,6 +46,11 @@ class AutomationRequest(BaseModel):
     identifier: str
     quantity: str
     workplace_position: int = Field(default=1, ge=1, le=4, description="Workplace position (1-4)")
+
+@app.get("/version")
+async def get_version():
+    """Return the current version of the service"""
+    return {"version": VERSION}
 
 def remember_active_window_title():
     """Store the title of the currently active Chrome window for later restoration"""
@@ -134,10 +136,12 @@ def automation_task(identifier: str, quantity: str, workplace_position: int = 1)
         win.set_focus()
         time.sleep(0.5)
 
-        # TODO: Add a click on the end button, then again a little higher to ensure the right window from the defects window or workplace window vertically
+     
 
         # Initial click to ensure operation window focus
-        pyautogui.click(x=1254, y=623) 
+        pyautogui.click(x=1306, y=699) 
+        time.sleep(0.5)
+        pyautogui.click(x=1306, y=699) 
         time.sleep(1)
 
         # Select workplace position with vertical offset
