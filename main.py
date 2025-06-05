@@ -1,6 +1,6 @@
 """
 Hydra Print Automation Service
-Version: 1.3.0
+Version: 1.3.1
 
 A FastAPI-based service for automating print operations in HYDRA system.
 """
@@ -9,7 +9,7 @@ import uvicorn
 from fastapi import FastAPI, Request, HTTPException
 from pydantic import BaseModel, Field
 from threading import Thread
-from multiprocessing import Process
+from multiprocessing import Process, Event
 import time
 import tkinter as tk
 from pywinauto import Application, Desktop
@@ -28,7 +28,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Define the version directly
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 
 # Initialize FastAPI application
 app = FastAPI(
@@ -39,7 +39,9 @@ app = FastAPI(
 
 # Global variables for window management
 focused_chrome_window = {"title": None}
+chrome_was_active = False
 status_process = None
+close_status_event = None
 
 # Request model for automation endpoint
 class AutomationRequest(BaseModel):
@@ -54,15 +56,18 @@ async def get_version():
 
 def remember_active_window_title():
     """Store the title of the currently active Chrome window for later restoration"""
-    global focused_chrome_window
+    global focused_chrome_window, chrome_was_active
     try:
         windows = Desktop(backend="win32").windows()
         for w in windows:
             if "Chrome" in w.window_text():
                 focused_chrome_window["title"] = w.window_text()
+                chrome_was_active = True
                 return
+        chrome_was_active = False
     except Exception as e:
         logger.error(f"Error remembering Chrome window: {e}")
+        chrome_was_active = False
 
 def restore_chrome():
     """Restore the previously active Chrome window"""
@@ -77,7 +82,7 @@ def restore_chrome():
     except Exception as e:
         logger.error(f"Error restoring Chrome window: {e}")
 
-def status_window_fn():
+def status_window_fn(close_event):
     """Create and display a status window showing automation progress"""
     win = tk.Tk()
     screen_width = win.winfo_screenwidth()
@@ -95,21 +100,35 @@ def status_window_fn():
         font=("Segoe UI", 18, "bold")
     )
     label.pack(expand=True)
+    
+    def check_close_event():
+        if close_event.is_set():
+            win.quit()
+            win.destroy()
+        else:
+            win.after(100, check_close_event)  # Check every 100ms
+    
+    check_close_event()
     win.mainloop()
 
 def show_status_window():
     """Start the status window in a separate process"""
-    global status_process
-    status_process = Process(target=status_window_fn)
+    global status_process, close_status_event
+    close_status_event = Event()
+    status_process = Process(target=status_window_fn, args=(close_status_event,))
     status_process.start()
 
 def close_status_window():
     """Terminate the status window process"""
-    global status_process
-    if status_process is not None:
-        status_process.terminate()
-        status_process.join()
+    global status_process, close_status_event
+    if status_process is not None and close_status_event is not None:
+        close_status_event.set()
+        status_process.join(timeout=2)  # Wait up to 2 seconds
+        if status_process.is_alive():
+            status_process.terminate()
+            status_process.join()
         status_process = None
+        close_status_event = None
 
 def automation_task(identifier: str, quantity: str, workplace_position: int = 1):
     """
@@ -177,10 +196,14 @@ def automation_task(identifier: str, quantity: str, workplace_position: int = 1)
         logger.error(f"Automation error: {e}")
         raise
         
-    # Restore previous window state
-    time.sleep(2.5)
-    restore_chrome()
-    time.sleep(0.5)
+    # Restore previous window state only if Chrome was previously active
+    if chrome_was_active:
+        time.sleep(2.5)
+        restore_chrome()
+        time.sleep(1.0)
+        # Click to focus on the DMCheck input field
+        pyautogui.click(x=660, y=276) 
+
     close_status_window()
 
 @app.post("/run-aip-print-automation")
