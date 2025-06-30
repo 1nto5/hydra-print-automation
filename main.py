@@ -1,18 +1,28 @@
 """
 Hydra Print Automation Service
-Version: 1.3.2
+Version: 1.3.3
 
 A FastAPI-based service for automating print operations in HYDRA system.
 """
 
+# Standard library imports
+import logging
+import time
+from threading import Thread
+
+# Third-party imports
+import pyautogui
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException
+from PIL import Image
 from pydantic import BaseModel, Field
-from threading import Thread
-import time
 from pywinauto import Application, Desktop
-import pyautogui
-import logging
+
+# =============================================================================
+# CONFIGURATION AND CONSTANTS
+# =============================================================================
+
+VERSION = "1.3.3"
 
 # Configure logging to both file and console
 logging.basicConfig(
@@ -25,30 +35,94 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Define the version directly
-VERSION = "1.3.2"
+# Global variables for window management
+focused_chrome_window = {"title": None}
+chrome_was_active = False
 
-# Initialize FastAPI application
+# =============================================================================
+# PYDANTIC MODELS
+# =============================================================================
+
+class AutomationRequest(BaseModel):
+    identifier: str
+    quantity: str
+    workplace_position: int = Field(default=1, ge=1, le=4, description="Workplace position (1-4)")
+
+# =============================================================================
+# FASTAPI APPLICATION SETUP
+# =============================================================================
+
 app = FastAPI(
     title="Hydra Print Automation",
     description="Automation service for HYDRA print operations",
     version=VERSION
 )
 
-# Global variables for window management
-focused_chrome_window = {"title": None}
-chrome_was_active = False
+# =============================================================================
+# UTILITY FUNCTIONS
+# =============================================================================
 
-# Request model for automation endpoint
-class AutomationRequest(BaseModel):
-    identifier: str
-    quantity: str
-    workplace_position: int = Field(default=1, ge=1, le=4, description="Workplace position (1-4)")
+def get_pixel_color_at_position(x: int, y: int):
+    """
+    Utility function to get the color at a specific position
+    Useful for determining what color to check for
+    
+    Args:
+        x: X coordinate
+        y: Y coordinate
+        
+    Returns:
+        tuple: RGB color tuple at the specified position
+    """
+    try:
+        screenshot = pyautogui.screenshot()
+        color = screenshot.getpixel((x, y))
+        logger.info(f"Color at position ({x}, {y}): {color}")
+        return color
+    except Exception as e:
+        logger.error(f"Error getting color at ({x}, {y}): {e}")
+        return None
 
-@app.get("/version")
-async def get_version():
-    """Return the current version of the service"""
-    return {"version": VERSION}
+def wait_for_color_change(x: int, y: int, expected_color: tuple, timeout: int = 30):
+    """
+    Wait for a specific color to appear at the given coordinates
+    
+    Args:
+        x: X coordinate to check
+        y: Y coordinate to check  
+        expected_color: RGB tuple of the expected color (e.g., (255, 255, 255) for white)
+        timeout: Maximum time to wait in seconds
+        
+    Returns:
+        bool: True if color is found, False if timeout reached
+    """
+    start_time = time.time()
+    
+    while time.time() - start_time < timeout:
+        try:
+            # Take a screenshot and get the pixel color at the specified position
+            screenshot = pyautogui.screenshot()
+            pixel_color = screenshot.getpixel((x, y))
+            
+            # Check if the color matches (with small tolerance for color variations)
+            color_diff = sum(abs(pixel_color[i] - expected_color[i]) for i in range(3))
+            if color_diff <= 30:  # Allow small variations in color
+                logger.info(f"Expected color found at ({x}, {y}): {pixel_color}")
+                return True
+                
+            logger.debug(f"Color at ({x}, {y}) is {pixel_color}, waiting for {expected_color}")
+            time.sleep(1)
+            
+        except Exception as e:
+            logger.error(f"Error checking color at ({x}, {y}): {e}")
+            time.sleep(1)
+    
+    logger.warning(f"Timeout waiting for color {expected_color} at ({x}, {y})")
+    return False
+
+# =============================================================================
+# WINDOW MANAGEMENT FUNCTIONS
+# =============================================================================
 
 def remember_active_window_title():
     """Store the title of the currently active Chrome window for later restoration"""
@@ -78,6 +152,10 @@ def restore_chrome():
     except Exception as e:
         logger.error(f"Error restoring Chrome window: {e}")
 
+# =============================================================================
+# AUTOMATION FUNCTIONS
+# =============================================================================
+
 def automation_task(identifier: str, quantity: str, workplace_position: int = 1):
     """
     Main automation sequence for print operations
@@ -101,12 +179,10 @@ def automation_task(identifier: str, quantity: str, workplace_position: int = 1)
             win.restore()
         win.set_focus()
         time.sleep(0.5)
-
-     
-
+            
         # Initial click to ensure operation window focus
         pyautogui.click(x=1306, y=699) 
-        time.sleep(0.5)
+        time.sleep(1)
         pyautogui.click(x=1306, y=699) 
         time.sleep(1)
 
@@ -115,25 +191,35 @@ def automation_task(identifier: str, quantity: str, workplace_position: int = 1)
         pyautogui.click(x=150, y=workplace_y) 
         time.sleep(1)
 
+        # Wait for loading to complete before clicking operation
+        # Check for a specific color that indicates the loading window is gone
+        loading_check_x = 712  # X coordinate to check for loading status
+        loading_check_y = 311  # Y coordinate to check for loading status
+        expected_color = (40, 68, 151)  # Expected color when loading is complete (blue color)
+        
+        logger.info("Checking if loading window is active...")
+        if not wait_for_color_change(loading_check_x, loading_check_y, expected_color, timeout=30):
+            logger.warning("Loading check timed out, proceeding anyway...")
+
         # Click operation
         pyautogui.click(x=466, y=407) 
         time.sleep(1)
 
         # Click output batch
         pyautogui.click(x=129, y=652) 
-        time.sleep(1)
+        time.sleep(1.5)
 
         # Focus and enter quantity
         pyautogui.click(x=813, y=248) 
-        time.sleep(0.5)
+        time.sleep(1)  # Increased delay to ensure field focus
         pyautogui.write(quantity)
-        time.sleep(0.5)
-        
+        time.sleep(1)
+
         # Focus and enter identifier
         pyautogui.click(x=293, y=632) 
-        time.sleep(0.5)
+        time.sleep(1)
         pyautogui.write(identifier)
-        time.sleep(0.5)
+        time.sleep(1)
 
         # Click print button
         pyautogui.click(x=1191, y=711) 
@@ -145,11 +231,20 @@ def automation_task(identifier: str, quantity: str, workplace_position: int = 1)
         
     # Restore previous window state only if Chrome was previously active
     if chrome_was_active:
-        time.sleep(2.5)
+        time.sleep(3)
         restore_chrome()
-        time.sleep(1.0)
+        time.sleep(1.5)
         # Click to focus on the DMCheck input field
-        pyautogui.click(x=660, y=276) 
+        pyautogui.click(x=660, y=256)
+
+# =============================================================================
+# API ENDPOINTS
+# =============================================================================
+
+@app.get("/version")
+async def get_version():
+    """Return the current version of the service"""
+    return {"version": VERSION}
 
 @app.post("/run-aip-print-automation")
 async def run_automation(request: Request, body: AutomationRequest):
@@ -166,6 +261,10 @@ async def run_automation(request: Request, body: AutomationRequest):
     thread = Thread(target=automation_task, args=(body.identifier, body.quantity, body.workplace_position))
     thread.start()
     return {"status": "started"}
+
+# =============================================================================
+# APPLICATION ENTRY POINT
+# =============================================================================
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=5000)
